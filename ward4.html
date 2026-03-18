@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ST. ELSEWHERE — WARD 4</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:'Courier New',monospace; }
+canvas { display:block; width:100vw; height:100vh; }
+#ui { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10; font-family:'Courier New',monospace; }
+
+/* Crosshair */
+#xhair { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:14px;height:14px; }
+#xhair::before,#xhair::after { content:'';position:absolute;background:rgba(255,255,220,0.45); }
+#xhair::before { width:1px;height:6px;top:4px;left:6px; }
+#xhair::after  { width:6px;height:1px;top:6px;left:4px; }
+
+/* Top */
+#top-bar { position:absolute;top:0;left:0;right:0;padding:14px 20px;display:flex;justify-content:space-between;align-items:flex-start; }
+#ward-label { font-size:9px;color:rgba(255,255,220,0.25);letter-spacing:4px; }
+#pa-system { font-size:10px;color:rgba(255,255,220,0.5);letter-spacing:2px;text-align:right;line-height:1.8; font-style:italic; }
+
+/* Notes collected */
+#notes-wrap { position:absolute;top:55px;right:20px;display:flex;flex-direction:column;gap:3px;align-items:flex-end; }
+.note-pip { font-size:9px;color:rgba(255,255,180,0.25);letter-spacing:2px; }
+.note-pip.found { color:rgba(255,255,180,0.75); }
+
+/* Prompt */
+#prompt { position:absolute;top:57%;left:50%;transform:translateX(-50%);font-size:10px;color:rgba(255,255,200,0.7);letter-spacing:3px;opacity:0;transition:opacity 0.25s;background:rgba(0,0,0,0.35);padding:4px 12px; }
+
+/* Message */
+#msg { position:absolute;top:40%;left:50%;transform:translateX(-50%);font-size:12px;color:rgba(255,255,210,0.9);letter-spacing:3px;text-align:center;opacity:0;transition:opacity 0.5s;line-height:1.9;white-space:pre-line;background:rgba(0,0,0,0.3);padding:8px 18px; }
+
+/* Sanity */
+#sanity-wrap { position:absolute;bottom:26px;left:22px; }
+#sanity-label { font-size:8px;color:rgba(255,255,200,0.2);letter-spacing:3px;margin-bottom:3px; }
+#sanity-bar { width:90px;height:3px;background:rgba(255,255,255,0.06); }
+#sanity-fill { height:100%;background:rgba(255,255,200,0.4);transition:width 0.8s; }
+
+/* Vent sound indicator */
+#vent-indicator { position:absolute;bottom:26px;right:22px;font-size:9px;color:rgba(255,255,200,0);letter-spacing:3px;transition:color 2s;text-align:right; }
+
+/* Controls */
+#controls { position:absolute;bottom:58px;right:22px;font-size:8px;color:rgba(255,255,255,0.1);line-height:2;letter-spacing:1px;text-align:right; }
+
+/* Flashes */
+#dmg-flash { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,0,0,0);pointer-events:none;z-index:9; }
+#white-flash { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,220,0);pointer-events:none;z-index:8;transition:background 0.3s; }
+#vignette { position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.55) 100%);pointer-events:none;z-index:5; }
+#flicker-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0);pointer-events:none;z-index:7; }
+
+/* Lock hint */
+#lockhint { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:rgba(255,255,200,0.6);letter-spacing:2px;background:rgba(0,0,0,0.85);padding:10px 22px;border:1px solid rgba(255,255,200,0.15);display:none;text-align:center; }
+
+/* Overlay */
+#overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:#f5f0e0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;pointer-events:all;gap:14px; }
+#ov-logo { font-size:9px;color:rgba(80,70,50,0.4);letter-spacing:5px; }
+#ov-title { font-size:36px;color:rgba(60,55,40,0.85);letter-spacing:6px;font-weight:400;text-align:center;line-height:1.4; }
+#ov-rule { width:120px;height:1px;background:rgba(80,70,50,0.2); }
+#ov-desc { font-size:10px;color:rgba(80,70,50,0.45);letter-spacing:2px;line-height:2.4;text-align:center;max-width:380px; }
+#ov-warn { font-size:9px;color:rgba(140,60,50,0.5);letter-spacing:2px; }
+#start-btn { padding:10px 32px;background:transparent;border:1px solid rgba(80,70,50,0.25);color:rgba(80,70,50,0.6);font-family:'Courier New',monospace;font-size:10px;letter-spacing:4px;cursor:pointer;transition:all 0.2s;margin-top:6px; }
+#start-btn:hover { background:rgba(80,70,50,0.06);border-color:rgba(80,70,50,0.5);color:rgba(60,55,40,0.9); }
+
+/* Dead / Win */
+#deadscreen { display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0805;flex-direction:column;align-items:center;justify-content:center;z-index:100;pointer-events:all;gap:12px; }
+#dead-h { font-size:36px;color:rgba(200,60,40,0.7);letter-spacing:6px;font-weight:400; }
+#dead-msg { font-size:10px;color:rgba(180,120,100,0.35);letter-spacing:2px;text-align:center;line-height:2.5;max-width:380px; }
+
+#winscreen { display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#f5f0e0;flex-direction:column;align-items:center;justify-content:center;z-index:100;pointer-events:all;gap:12px; }
+#win-h { font-size:28px;color:rgba(60,55,40,0.7);letter-spacing:6px;font-weight:400;text-align:center;line-height:1.4; }
+#win-msg { font-size:10px;color:rgba(80,70,50,0.4);letter-spacing:2px;text-align:center;line-height:2.5; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<div id="dmg-flash"></div>
+<div id="white-flash"></div>
+<div id="flicker-overlay"></div>
+
+<div id="ui">
+  <div id="xhair"></div>
+  <div id="top-bar">
+    <div>
+      <div id="ward-label">ST. ELSEWHERE MEMORIAL — WARD 4</div>
+      <div id="room-label" style="font-size:11px;color:rgba(255,255,200,0.4);letter-spacing:2px;margin-top:3px;"></div>
+    </div>
+    <div id="pa-system">...</div>
+  </div>
+  <div id="notes-wrap">
+    <div class="note-pip" id="np0">◻ NOTE 1/6</div>
+    <div class="note-pip" id="np1">◻ NOTE 2/6</div>
+    <div class="note-pip" id="np2">◻ NOTE 3/6</div>
+    <div class="note-pip" id="np3">◻ NOTE 4/6</div>
+    <div class="note-pip" id="np4">◻ NOTE 5/6</div>
+    <div class="note-pip" id="np5">◻ NOTE 6/6</div>
+  </div>
+  <div id="prompt"></div>
+  <div id="msg"></div>
+  <div id="sanity-wrap">
+    <div id="sanity-label">COMPOSURE</div>
+    <div id="sanity-bar"><div id="sanity-fill" style="width:100%"></div></div>
+  </div>
+  <div id="vent-indicator">SOMETHING IN THE VENTS</div>
+  <div id="controls">WASD · MOVE<br>MOUSE · LOOK<br>SPACE · JUMP<br>SHIFT · RUN<br>E · EXAMINE</div>
+  <div id="lockhint">CLICK TO LOCK MOUSE</div>
+</div>
+
+<div id="overlay">
+  <div id="ov-logo">// ST. ELSEWHERE MEMORIAL HOSPITAL //</div>
+  <div id="ov-title">WARD 4<br>— NIGHT SHIFT —</div>
+  <div id="ov-rule"></div>
+  <div id="ov-desc">
+    You wake up in Ward 4.<br>
+    You don't remember being admitted.<br>
+    Find 6 patient notes to piece together what happened.<br>
+    The ward loops. Every door leads somewhere wrong.<br>
+  </div>
+  <div id="ov-warn">The PA is paging Dr. Harlow. Dr. Harlow died in 1987.</div>
+  <button id="start-btn" onclick="startGame()">OPEN EYES</button>
+</div>
+
+<div id="deadscreen">
+  <div id="dead-h">PATIENT DECEASED</div>
+  <div id="dead-msg"></div>
+  <button style="font-family:'Courier New',monospace;padding:9px 26px;background:transparent;border:1px solid rgba(180,60,40,0.25);color:rgba(180,80,60,0.5);font-size:9px;letter-spacing:4px;cursor:pointer;margin-top:10px;" onclick="location.reload()">READMIT</button>
+</div>
+
+<div id="winscreen">
+  <div id="win-h">YOU FOUND<br>THE EXIT</div>
+  <div id="win-msg"></div>
+  <button style="font-family:'Courier New',monospace;padding:9px 26px;background:transparent;border:1px solid rgba(80,70,50,0.2);color:rgba(80,70,50,0.4);font-size:9px;letter-spacing:4px;cursor:pointer;margin-top:10px;" onclick="location.reload()">RETURN TO WARD</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── GLOBALS ──────────────────────────────────────────────────────────
+let scene, camera, renderer, clock;
+let gameActive = false, isPointerLocked = false;
+let keys = {}, yaw = 0, pitch = 0;
+let velocityY = 0, onGround = true, sprintStam = 100;
+let dmgTimer = 0, msgTimer = 0, whiteTimer = 0;
+let missionTime = 0, sanity = 100;
+let notesFound = 0;
+const NOTES_NEEDED = 6;
+
+// Room system
+let roomMeshes = [], roomLights = [], interactables = [], flickerLights = [];
+let currentRoomName = '';
+let roomsVisited = 0;
+let doorOpenCount = 0;
+
+// Entity
+let entityActive = false, entityPos = new THREE.Vector3(0,0,-50);
+let entityMesh = null, entityLight = null;
+let entitySpeed = 1.2, entityAwareness = 0;
+let entitySoundTimer = 0;
+let lastEntityDist = 999;
+
+// PA announcements
+const PA_LINES = [
+  'Dr. Harlow to Ward 4. Dr. Harlow to Ward 4.',
+  'Code blue. Room 412. Code blue. Room 412.',
+  'Visiting hours ended at 9 PM.',
+  'Dr. Harlow, please report to radiology.',
+  'All staff to the east wing. All staff.',
+  'Patient in Room 408 requesting assistance.',
+  'Dr. Harlow to the ICU. Stat.',
+  'This is a reminder: Ward 4 is currently closed to visitors.',
+  'Dr. Harlow... please come to the nurses station.',
+  '...Dr. Harlow has not responded to pages since November 14th, 1987.',
+];
+let paTimer = 12, paIndex = 0;
+
+// Note content
+const NOTE_TEXTS = [
+  'Patient: Unknown. Admitted: Unknown.\nCondition: Disoriented. No ID.\nNotes: Patient keeps asking\nwhy the ward is empty.',
+  'Maintenance log 11/13/87:\nVent grille in corridor B\nfound damaged from inside.\nNotifying facilities.',
+  'Dr. Harlow — last entry:\n"The patient in 412 is not\nthe same patient as yesterday.\nSame room. Different person."',
+  'STAFF NOTICE:\nDo not enter Ward 4 after 11 PM.\nDo not respond to sounds\nin the ceiling.',
+  'Patient: Unknown. Day 4.\nPatient has not eaten.\nPatient does not appear\nto be breathing.',
+  'If you are reading this:\nThe ward does not loop.\nYou do.\nFind the exit on the\nground floor. It moves.',
+];
+
+// Room name pool
+const ROOM_NAMES = [
+  'CORRIDOR B — WARD 4','ROOM 408','NURSES STATION','ROOM 412',
+  'TREATMENT ROOM 3','WAITING AREA','CORRIDOR C','ROOM 415',
+  'SUPPLY CLOSET','X-RAY SUITE','ROOM 401','STAFF LOUNGE',
+  'CORRIDOR A — WARD 4','ROOM 406','ICU ANTEROOM','STAIRWELL B',
+];
+
+// ── INIT ─────────────────────────────────────────────────────────────
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf2eedc);
+  scene.fog = new THREE.Fog(0xf2eedc, 6, 28);
+
+  camera = new THREE.PerspectiveCamera(74, innerWidth/innerHeight, 0.05, 60);
+  camera.position.set(0, 1.65, 0);
+
+  renderer = new THREE.WebGLRenderer({ canvas:document.getElementById('c'), antialias:true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  clock = new THREE.Clock();
+
+  buildEntity();
+  loadRoom('ROOM 412 — WARD 4', true);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+    if (!gameActive) return;
+    if (e.code === 'KeyE') tryInteract();
+  });
+  document.addEventListener('keyup', e => keys[e.code] = false);
+
+  document.addEventListener('mousemove', e => {
+    if (!isPointerLocked || !gameActive) return;
+    yaw   -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-0.75, Math.min(0.65, pitch));
+  });
+
+  document.getElementById('c').addEventListener('click', () => {
+    if (gameActive && !isPointerLocked) document.getElementById('c').requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', () => {
+    isPointerLocked = !!document.pointerLockElement;
+    document.getElementById('lockhint').style.display = isPointerLocked ? 'none' : (gameActive ? 'block' : 'none');
+  });
+  document.addEventListener('pointerlockerror', () => {
+    document.getElementById('lockhint').textContent = '⚠ Open file in browser for mouse lock';
+    document.getElementById('lockhint').style.display = 'block';
+  });
+}
+
+// ── ROOM BUILDER ─────────────────────────────────────────────────────
+function clearRoom() {
+  roomMeshes.forEach(m => scene.remove(m));
+  roomLights.forEach(l => scene.remove(l));
+  roomMeshes = []; roomLights = []; interactables = []; flickerLights = [];
+}
+
+function M(col, emissive) {
+  const mat = new THREE.MeshLambertMaterial({ color:col });
+  if (emissive) { mat.emissive = new THREE.Color(emissive); mat.emissiveIntensity = 0.4; }
+  return mat;
+}
+function Mb(col) { return new THREE.MeshBasicMaterial({ color:col }); }
+
+function box(w,h,d, mat, x,y,z, shadow) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z);
+  if (shadow) { m.castShadow=true; m.receiveShadow=true; }
+  scene.add(m); roomMeshes.push(m); return m;
+}
+
+function pl(x,y,z, col, intensity, dist, flicker) {
+  const l = new THREE.PointLight(col, intensity, dist);
+  l.position.set(x,y,z); l.castShadow = false;
+  scene.add(l); roomLights.push(l);
+  if (flicker) flickerLights.push({ light:l, base:intensity, t:Math.random()*10, broken: Math.random()>0.65 });
+  return l;
+}
+
+function makeRoom(w, h, d, floorCol, wallCol, ceilCol) {
+  // Floor
+  box(w, 0.15, d, M(floorCol), 0,-0.07,0, true);
+  // Ceiling
+  box(w, 0.12, d, M(ceilCol), 0,h+0.06,0, false);
+  // Walls
+  box(w, h, 0.15, M(wallCol), 0,h/2,-d/2, true);
+  box(w, h, 0.15, M(wallCol), 0,h/2, d/2, true);
+  box(0.15,h,d,  M(wallCol), -w/2,h/2,0, true);
+  box(0.15,h,d,  M(wallCol),  w/2,h/2,0, true);
+  // Floor tiles
+  for (let x=-Math.floor(w/2); x<Math.floor(w/2); x++) {
+    for (let z=-Math.floor(d/2); z<Math.floor(d/2); z++) {
+      if ((x+z)%2===0) box(0.98,0.01,0.98, M(0xe8e4d0), x+0.5,0.01,z+0.5, false);
+    }
+  }
+  // Baseboard
+  box(w,0.1,0.05, M(0xd8d4c0), 0,0.05,-d/2+0.1, false);
+  box(w,0.1,0.05, M(0xd8d4c0), 0,0.05, d/2-0.1, false);
+  box(0.05,0.1,d, M(0xd8d4c0), -w/2+0.1,0.05,0, false);
+  box(0.05,0.1,d, M(0xd8d4c0),  w/2-0.1,0.05,0, false);
+}
+
+function addCeilLight(x, z, h, flicker, broken) {
+  // Fluorescent fixture
+  box(0.1,0.06,1.0, Mb(broken?0xaaa890:0xfffff0), x,h-0.02,z, false);
+  box(0.08,0.04,0.96, broken?Mb(0x888870):Mb(0xffffe8), x,h-0.06,z, false);
+  if (!broken) {
+    pl(x,h-0.15,z, 0xfff8e8, 2.2, 12, flicker);
+  } else {
+    pl(x,h-0.15,z, 0xfff0c8, 0.4, 6, true); // dim broken light
+  }
+}
+
+function addDoor(x, z, ry, label, type) {
+  const frame = box(1.05,2.1,0.12, M(0xd0cbb8), x,1.05,z, false);
+  frame.rotation.y = ry;
+  const panel = box(0.92,1.95,0.08, M(0xe8e4d4), x,1.05,z, false);
+  panel.rotation.y = ry;
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045,8,8), M(0xc8b880));
+  knob.position.set(x+(ry===0?0.28:0.04), 1.05, z+(ry===0?0.05:0.28));
+  scene.add(knob); roomMeshes.push(knob);
+  // Number plate
+  if (label) {
+    const plate = box(0.18,0.08,0.03, Mb(0xc8b880), x+(ry===0?0:0.1), 1.7, z+(ry===0?0.1:0), false);
+    plate.rotation.y = ry;
+  }
+  interactables.push({ pos:new THREE.Vector3(x,0,z), type, label, used:false });
+}
+
+function addBed(x, z) {
+  box(1.0,0.5,2.2, M(0xddd8c8), x,0.25,z, true);   // frame
+  box(0.95,0.12,2.0, M(0xf0ece0), x,0.52,z, true);  // mattress
+  box(0.95,0.06,0.7, M(0xe8e4d4), x,0.55,z-0.6, true); // pillow
+  box(1.1,0.06,0.15, M(0xb8b4a4), x,0.5, z+0.55, false); // footboard
+  box(1.1,0.5,0.12, M(0xc8c4b4), x,0.5, z-1.18, false); // headboard
+  // IV stand
+  const ivX = x+0.7, ivZ = z-0.6;
+  new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.8,6), M(0xb8b4a8))
+    .position.set(ivX,0.9,ivZ);
+  const ivStand = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.8,6), M(0xb8b4a8));
+  ivStand.position.set(ivX,0.9,ivZ); scene.add(ivStand); roomMeshes.push(ivStand);
+  const ivBag = new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8), M(0xd0e8e0,0xd0e8e0));
+  ivBag.position.set(ivX,1.85,ivZ); ivBag.scale.y=1.5; scene.add(ivBag); roomMeshes.push(ivBag);
+}
+
+function addNote(x, y, z, idx, ry) {
+  const paper = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.01), Mb(0xf0ece0));
+  paper.position.set(x,y,z); if(ry) paper.rotation.y=ry;
+  scene.add(paper); roomMeshes.push(paper);
+  pl(x,y+0.1,z, 0xffeeaa, 0.3, 2, false);
+  interactables.push({ pos:new THREE.Vector3(x,y,z), type:'note', idx, used:false, label:'[E] READ NOTE' });
+}
+
+function addVentGrille(x, y, z, ry) {
+  const frame = box(0.7,0.5,0.04, M(0xb8b4a8), x,y,z, false);
+  if(ry) frame.rotation.y=ry;
+  // Grille slats
+  for(let i=-2;i<=2;i++){
+    const slat = box(0.64,0.03,0.02, Mb(0x9898a0), x, y+i*0.08, z+(ry===0?0.03:0));
+    if(ry) slat.rotation.y=ry;
+    roomMeshes.push(slat); scene.add(slat);
+  }
+}
+
+// ── ROOM TEMPLATES ───────────────────────────────────────────────────
+function loadRoom(name, isStart) {
+  clearRoom();
+  camera.position.set(0, 1.65, 2);
+  pitch = 0;
+  currentRoomName = name;
+  document.getElementById('room-label').textContent = name;
+  roomsVisited++;
+
+  const templates = [buildPatientRoom, buildCorridor, buildNursesStation,
+                     buildTreatmentRoom, buildWaiting, buildSupplyCloset];
+  if (isStart) { buildPatientRoom(true); return; }
+  templates[Math.floor(Math.random()*templates.length)]();
+}
+
+function buildPatientRoom(isStart) {
+  const W=8,H=3.0,D=9;
+  scene.background.set(0xf2eedc);
+  scene.fog.color.set(0xf2eedc); scene.fog.near=6; scene.fog.far=28;
+  makeRoom(W,H,D, 0xdcd8c4, 0xeae6d4, 0xf0ecd8);
+
+  const amb = new THREE.AmbientLight(0xfff8e8, 2.0); scene.add(amb); roomLights.push(amb);
+  addCeilLight(-1.5, -2, H, true, false);
+  addCeilLight( 1.5, -2, H, false, Math.random()>0.5);
+  addCeilLight( 0,   2,  H, true, false);
+
+  addBed(-2, -2.5);
+  if (!isStart) addBed(2, -2.5);
+
+  // Window (blocked — outside is just white)
+  box(0.06,1.4,1.0, M(0xd4d0bc), -3.93,1.8,2, false);
+  box(0.04,1.2,0.85, Mb(0xf8f8f0), -3.94,1.8,2, false); // frosted
+
+  // Side table
+  box(0.5,0.7,0.5, M(0xd4d0bc), -0.8,0.35,-2.5, true);
+  box(0.5,0.06,0.5, M(0xc8c4b4), -0.8,0.7,-2.5, false);
+
+  // Curtain track
+  box(W-0.5,0.04,0.04, Mb(0xb8b4a4), 0,2.7,0.8, false);
+
+  // Vent grille
+  addVentGrille(-3.92, 1.4, 1.5, Math.PI/2);
+
+  // Note on table
+  if (notesFound < NOTES_NEEDED) addNote(-0.8,0.74,-2.5, notesFound%NOTES_NEEDED, 0.2);
+
+  // Door out
+  addDoor(0, 4.38, 0, null, 'exit');
+  if (!isStart) addDoor(-3.93, 0, Math.PI/2, null, 'exit');
+}
+
+function buildCorridor() {
+  const W=4,H=3.0,D=20;
+  scene.background.set(0xf0ecda);
+  scene.fog.color.set(0xf0ecda); scene.fog.near=5; scene.fog.far=24;
+  makeRoom(W,H,D, 0xd8d4c0, 0xe8e4d0, 0xf0ecd8);
+
+  const amb = new THREE.AmbientLight(0xfff8e8, 1.6); scene.add(amb); roomLights.push(amb);
+  for(let z=-7;z<=7;z+=4) addCeilLight(0,z,H, z%8===0, Math.random()>0.6);
+
+  // Doors along corridor
+  [-7,-3,3,7].forEach((z,i)=>{
+    const side = i%2===0?-W/2:W/2;
+    addDoor(side+(i%2===0?0.08:-0.08), z, Math.PI/2, 'ROOM 4'+Math.floor(Math.random()*10+1), 'exit');
+  });
+
+  // Wheelchair
+  box(0.6,0.8,0.9, M(0xc8c4b4), 1.5,0.4,2, true);
+  box(0.6,0.06,0.7, M(0xd4d0bc), 1.5,0.82,2, false);
+
+  // Notice board
+  box(0.04,0.9,1.4, M(0x8a7a60), -1.93,1.6,-5, false);
+  box(0.03,0.8,1.3, Mb(0xc8b880), -1.94,1.6,-5, false);
+
+  // Vent grill
+  addVentGrille(-1.94, 0.5, 3, Math.PI/2);
+  addVentGrille(-1.94, 0.5,-3, Math.PI/2);
+
+  // Note on floor or wall
+  if (notesFound < NOTES_NEEDED) addNote(1.5, 0.4, -4, notesFound%NOTES_NEEDED, 0.3);
+
+  // Through doors at ends
+  addDoor(0, 9.88, 0, null, 'exit');
+  addDoor(0,-9.88, 0, null, 'exit');
+}
+
+function buildNursesStation() {
+  const W=10,H=3.0,D=9;
+  scene.background.set(0xf4f0de);
+  scene.fog.color.set(0xf4f0de);
+  makeRoom(W,H,D, 0xdad6c2, 0xeae6d4, 0xf4f0de);
+
+  const amb = new THREE.AmbientLight(0xfff8e8, 2.2); scene.add(amb); roomLights.push(amb);
+  addCeilLight(-2,0,H,false,false); addCeilLight(2,0,H,true,false); addCeilLight(0,-3,H,false,true);
+
+  // Counter
+  box(5,1.0,0.8, M(0xd0ccb8), 0,0.5,-2.5, true);
+  box(5,0.06,0.8, M(0xc4c0ac), 0,1.02,-2.5, false);
+  // Monitors on counter
+  [-1.5,1.5].forEach(x=>{
+    box(0.7,0.45,0.4, M(0x202018), x,1.27,-2.5, false);
+    box(0.65,0.4,0.05, Mb(0x0a100a), x,1.27,-2.24, false); // screen
+    pl(x,1.3,-2.22, 0x88ff88, 0.15, 2, false);
+  });
+  // Filing cabinet
+  box(0.8,1.6,0.5, M(0xb8b4a4), -4.2,0.8,-3.5, true);
+  [0.3,0.75,1.2].forEach(y=>box(0.75,0.04,0.44, M(0xa8a498), -4.2,y,-3.5, false));
+
+  // Phone
+  box(0.22,0.06,0.14, M(0x303020), 0.5,1.05,-2.2, false);
+
+  // Clock on wall — no hands
+  new THREE.Mesh(new THREE.CircleGeometry(0.22,16), Mb(0xf0ece0))
+    .position.set(-4.93,2.0,0);
+  const clock = new THREE.Mesh(new THREE.CircleGeometry(0.22,16), Mb(0xf0ece0));
+  clock.position.set(-4.93,2.0,0); clock.rotation.y=Math.PI/2; scene.add(clock); roomMeshes.push(clock);
+  // Clock rim
+  const clockRim = new THREE.Mesh(new THREE.TorusGeometry(0.22,0.025,8,20), M(0x888880));
+  clockRim.position.copy(clock.position); clockRim.rotation.y=Math.PI/2; scene.add(clockRim); roomMeshes.push(clockRim);
+
+  // Vent
+  addVentGrille(-4.93, 1.0, 2, Math.PI/2);
+
+  if (notesFound < NOTES_NEEDED) addNote(0,1.06,-2.1, notesFound%NOTES_NEEDED, 0);
+
+  addDoor(0, 4.38, 0, null, 'exit');
+  addDoor(4.93, 0, Math.PI/2, null, 'exit');
+  addDoor(-4.93, 0, Math.PI/2, null, 'exit');
+}
+
+function buildTreatmentRoom() {
+  const W=8,H=3.0,D=8;
+  scene.background.set(0xf0f0e8);
+  scene.fog.color.set(0xf0f0e8);
+  makeRoom(W,H,D, 0xe0e0d0, 0xf0f0e8, 0xfafaf0);
+
+  const amb = new THREE.AmbientLight(0xf8f8f0, 2.4); scene.add(amb); roomLights.push(amb);
+  addCeilLight(0,0,H,false,false); addCeilLight(-2,-2.5,H,true,false);
+
+  // Examination table
+  box(0.7,0.9,2.2, M(0xc8c8c0), 0,0.45,0, true);
+  box(0.68,0.06,2.0, M(0xe8e8e0), 0,0.9,0, true);
+
+  // Cabinet with supplies
+  box(1.5,2.0,0.5, M(0xe0e0d8), 3.2,1.0,-3.5, true);
+  box(1.5,2.0,0.5, M(0xd8d8d0), 3.2,1.0,-3.5, false);
+  [0.25,0.75,1.25,1.75].forEach(y=>box(1.45,0.03,0.44, M(0xc0c0b8), 3.2,y,-3.5, false));
+
+  // X-ray lightbox
+  box(0.04,0.8,1.2, M(0x606058), -3.93,1.8,0, false);
+  box(0.03,0.72,1.1, Mb(0xc8d8e0), -3.94,1.8,0, false);
+  pl(-3.9,1.8,0, 0xc0e8f8, 0.8, 3, false);
+
+  // Vent (scratched around)
+  addVentGrille(3.93, 2.2, -1, Math.PI/2);
+  // Scratch marks near vent
+  box(0.04,0.35,0.04, Mb(0xa8a0a0), 3.88,2.0,-0.6, false);
+  box(0.04,0.3,0.04,  Mb(0xa8a0a0), 3.88,2.0,-0.4, false);
+
+  if (notesFound < NOTES_NEEDED) addNote(3.2,0.5,-3.2, notesFound%NOTES_NEEDED, -0.1);
+
+  addDoor(0, 3.88, 0, null, 'exit');
+}
+
+function buildWaiting() {
+  const W=10,H=3.0,D=9;
+  scene.background.set(0xf0ece0);
+  scene.fog.color.set(0xf0ece0);
+  makeRoom(W,H,D, 0xd8d4c0, 0xe8e4d4, 0xf0ece0);
+
+  const amb = new THREE.AmbientLight(0xfff8e8, 2.0); scene.add(amb); roomLights.push(amb);
+  addCeilLight(-3,0,H,true,false); addCeilLight(3,0,H,false,true); addCeilLight(0,-3,H,false,false);
+
+  // Rows of chairs
+  [[-3.5,2],[0,2],[3.5,2],[-3.5,0],[0,0],[3.5,0]].forEach(([x,z])=>{
+    box(0.55,0.45,0.5, M(0x6a5a48), x,0.22,z, true);
+    box(0.55,0.5,0.08, M(0x6a5a48), x,0.5,z-0.24, true);
+  });
+
+  // TV on wall — static
+  box(0.06,0.8,1.2, M(0x181818), -4.92,1.8,-2.5, false);
+  box(0.04,0.72,1.1, Mb(0x101418), -4.93,1.8,-2.5, false);
+  pl(-4.8,1.8,-2.5, 0x334455, 0.3, 4, true);
+
+  // Stack of magazines
+  box(0.3,0.05,0.22, Mb(0xe0b880), 1.5,0.48,2, false);
+  box(0.3,0.05,0.22, Mb(0xd0c8a0), 1.5,0.53,2, false);
+  box(0.3,0.05,0.22, Mb(0xc8b8b8), 1.5,0.58,2, false);
+
+  // Vent high up
+  addVentGrille(4.93, 2.5, 2, Math.PI/2);
+
+  // Note under chair
+  if (notesFound < NOTES_NEEDED) addNote(-3.5,0.05,-0.5, notesFound%NOTES_NEEDED, 0.1);
+
+  addDoor(0, 4.38, 0, null, 'exit');
+  addDoor(4.93, 1, Math.PI/2, null, 'exit');
+}
+
+function buildSupplyCloset() {
+  const W=5,H=3.0,D=5;
+  scene.background.set(0xe8e4d4);
+  scene.fog.color.set(0xe8e4d4); scene.fog.near=3; scene.fog.far=16;
+  makeRoom(W,H,D, 0xd4d0bc, 0xe4e0cc, 0xece8d4);
+
+  const amb = new THREE.AmbientLight(0xfff8d8, 1.4); scene.add(amb); roomLights.push(amb);
+  addCeilLight(0,0,H, true, Math.random()>0.4);
+
+  // Shelving
+  [[-1.8,-1.8],[-1.8,-0.5],[-1.8,0.8],[-1.8,2.1]].forEach(([y,z])=>{
+    if(y>0)box(1.5,0.04,0.4, M(0xc4c0ac), -2.1,y+1.5,z, false);
+  });
+  // Supplies on shelves
+  [[0,Mb(0xc8d4e0)],[0.3,Mb(0xe0d8c8)],[0.6,Mb(0xd0c8e0)]].forEach(([x,m])=>{
+    const s=box(0.25,0.3,0.2, m, x-2.1,2.7,-1.8, true);
+  });
+
+  // Mop bucket
+  box(0.35,0.45,0.35, M(0x888880), 1.8,0.22,1.8, true);
+  // Mop
+  const mopH = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,1.5,5), M(0xa89878));
+  mopH.position.set(1.65,0.75,1.65); mopH.rotation.z=0.2; scene.add(mopH); roomMeshes.push(mopH);
+
+  // Vent on floor level — scratched open
+  addVentGrille(-2.42, 0.3, 0, Math.PI/2);
+  // The grille is slightly offset — pushed open
+  box(0.65,0.48,0.04, M(0xb0aca0), -2.3,0.3,0.35, false);
+
+  if (notesFound < NOTES_NEEDED) addNote(1.8,0.5,-1.5, notesFound%NOTES_NEEDED, 0.15);
+
+  // Only one door
+  addDoor(0, 2.38, 0, null, 'exit');
+}
+
+// ── ENTITY ───────────────────────────────────────────────────────────
+function buildEntity() {
+  const group = new THREE.Group();
+
+  // Very tall, very thin — wrong proportions
+  const bodyMat = new THREE.MeshLambertMaterial({ color:0x1c1c18 });
+  const skinMat = new THREE.MeshLambertMaterial({ color:0xd4c8a8 });
+
+  // Legs — too long
+  [-0.18,0.18].forEach(x=>{
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16,1.5,0.16), bodyMat);
+    leg.position.set(x,0.75,0); group.add(leg);
+  });
+  // Torso — stretched
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55,1.4,0.3), bodyMat);
+  torso.position.set(0,2.2,0); group.add(torso);
+  // Arms — too long, hanging
+  [-0.38,0.38].forEach(x=>{
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12,1.3,0.12), bodyMat);
+    arm.position.set(x,1.95,0); group.add(arm);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.2,0.1), skinMat);
+    hand.position.set(x,1.28,0); group.add(hand);
+  });
+  // Head — slightly too large
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.5,0.4), skinMat);
+  head.position.set(0,3.22,0); group.add(head);
+  // No face — just smooth
+  // Lab coat collar detail
+  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.15,0.32), new THREE.MeshLambertMaterial({color:0xf0ece0}));
+  collar.position.set(0,2.88,0); group.add(collar);
+
+  entityLight = new THREE.PointLight(0xfff0d0, 0, 8);
+  entityLight.position.set(0,2.5,0); group.add(entityLight);
+
+  group.position.copy(entityPos);
+  group.visible = false;
+  scene.add(group);
+  entityMesh = group;
+}
+
+// ── GAME FLOW ────────────────────────────────────────────────────────
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  gameActive = true;
+  document.getElementById('lockhint').style.display = 'block';
+  setTimeout(() => document.getElementById('c').requestPointerLock(), 150);
+  showMsg('You are in Ward 4.\nThe ward has been closed since 1987.\nFind the notes.', 5);
+  animate();
+}
+
+function showMsg(text, dur=3.5) {
+  const el = document.getElementById('msg');
+  el.textContent = text; el.style.opacity='1'; msgTimer=dur;
+}
+
+function tryInteract() {
+  const cp = camera.position;
+  const look = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(pitch,yaw,0,'YXZ'));
+
+  for (const ia of interactables) {
+    const d = ia.pos.distanceTo(cp);
+    if (d > 3.2) continue;
+    const dot = ia.pos.clone().sub(cp).normalize().dot(look);
+    if (dot < 0.45) continue;
+    if (ia.used) continue;
+
+    if (ia.type === 'note') {
+      ia.used = true;
+      notesFound++;
+      document.getElementById('np'+(notesFound-1)).classList.add('found');
+      document.getElementById('np'+(notesFound-1)).textContent = '◼ NOTE '+notesFound+'/6';
+      sanity = Math.max(0, sanity - 12);
+      entityAwareness = Math.min(100, entityAwareness + 20);
+      showMsg(NOTE_TEXTS[(ia.idx||0) % NOTE_TEXTS.length], 6);
+      // White flash when reading
+      whiteTimer = 0.15;
+      document.getElementById('white-flash').style.background = 'rgba(255,255,220,0.4)';
+      if (notesFound >= NOTES_NEEDED) {
+        setTimeout(()=>showMsg('You have all the notes.\nFind the exit.\nIt moves.', 5), 7000);
+      }
+      return;
+    }
+
+    if (ia.type === 'exit') {
+      ia.used = true;
+      doorOpenCount++;
+      // Check win condition
+      if (notesFound >= NOTES_NEEDED && Math.random() < 0.25) {
+        winGame(); return;
+      }
+      // Entity gets closer each door
+      entityAwareness = Math.min(100, entityAwareness + 8);
+      entitySpeed = 1.2 + entityAwareness/80;
+      // Load next room with dark flash
+      document.getElementById('flicker-overlay').style.background = 'rgba(0,0,0,1)';
+      setTimeout(() => {
+        const nextName = ROOM_NAMES[Math.floor(Math.random()*ROOM_NAMES.length)];
+        loadRoom(nextName, false);
+        // Activate entity after 3 doors
+        if (doorOpenCount >= 3 && !entityActive) {
+          entityActive = true;
+          entityMesh.visible = true;
+          showMsg('Something is following you.', 3);
+        }
+        setTimeout(() => {
+          document.getElementById('flicker-overlay').style.background = 'rgba(0,0,0,0)';
+        }, 80);
+      }, 120);
+      return;
+    }
+  }
+}
+
+function checkNearby() {
+  const cp = camera.position;
+  const look = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(pitch,yaw,0,'YXZ'));
+  let label = '';
+  for (const ia of interactables) {
+    if (ia.used) continue;
+    const d = ia.pos.distanceTo(cp);
+    const dot = d < 3.5 ? ia.pos.clone().sub(cp).normalize().dot(look) : 0;
+    if (d < 3.2 && dot > 0.42) {
+      label = ia.type === 'note' ? '[E] READ NOTE' : '[E] OPEN DOOR';
+      break;
+    }
+  }
+  const el = document.getElementById('prompt');
+  el.textContent = label; el.style.opacity = label?'1':'0';
+}
+
+function die(reason) {
+  if (!gameActive) return;
+  gameActive = false;
+  document.exitPointerLock();
+  setTimeout(() => {
+    document.getElementById('deadscreen').style.display='flex';
+    document.getElementById('dead-msg').innerHTML =
+      `${reason}<br><br>NOTES RECOVERED: ${notesFound}/6<br>` +
+      `DOORS OPENED: ${doorOpenCount}<br>` +
+      `TIME: ${Math.floor(missionTime/60)}m ${Math.floor(missionTime%60)}s`;
+  }, 700);
+}
+
+function winGame() {
+  gameActive = false;
+  document.exitPointerLock();
+  setTimeout(() => {
+    document.getElementById('winscreen').style.display='flex';
+    document.getElementById('win-msg').innerHTML =
+      `You found the exit on floor 1.<br>` +
+      `Notes: ${notesFound}/6<br>` +
+      `Time: ${Math.floor(missionTime/60)}m ${Math.floor(missionTime%60)}s<br><br>` +
+      `The ward has been closed since 1987.<br>` +
+      `There is no record of your admission.`;
+  }, 600);
+}
+
+// ── PA SYSTEM ────────────────────────────────────────────────────────
+function updatePA(dt) {
+  paTimer -= dt;
+  if (paTimer <= 0) {
+    paTimer = 10 + Math.random()*15;
+    const line = PA_LINES[paIndex % PA_LINES.length];
+    paIndex++;
+    document.getElementById('pa-system').textContent = '📢 ' + line;
+    setTimeout(() => {
+      if (document.getElementById('pa-system'))
+        document.getElementById('pa-system').textContent = '...';
+    }, 5000);
+  }
+}
+
+// ── ENTITY UPDATE ────────────────────────────────────────────────────
+function updateEntityBehavior(dt) {
+  if (!entityActive) return;
+  const cp = camera.position;
+  const toPlayer = new THREE.Vector3().subVectors(cp, entityPos);
+  const dist = toPlayer.length();
+  lastEntityDist = dist;
+
+  // Move toward player — smoothly, eerily
+  toPlayer.normalize();
+  entityPos.addScaledVector(toPlayer, entitySpeed * dt);
+  entityMesh.position.copy(entityPos);
+  entityMesh.lookAt(cp.x, entityPos.y, cp.z);
+
+  // Subtle idle sway
+  entityMesh.rotation.z = Math.sin(missionTime*0.8)*0.03;
+
+  // Light flickers on proximity
+  entityLight.intensity = Math.max(0, (20-dist)/20) * 1.5;
+
+  // Vent sounds closer as it gets nearer
+  entitySoundTimer -= dt;
+  if (entitySoundTimer <= 0 && dist < 18) {
+    entitySoundTimer = 3 + Math.random()*4;
+    const vi = document.getElementById('vent-indicator');
+    vi.style.color = dist < 8 ? 'rgba(255,200,100,0.9)' : 'rgba(255,255,200,0.5)';
+    setTimeout(() => { if(vi) vi.style.color='rgba(255,255,200,0)'; }, 2000);
+  }
+
+  // Proximity horror vignette
+  if (dist < 12) {
+    const i = Math.max(0,(12-dist)/12);
+    document.getElementById('vignette').style.background =
+      `radial-gradient(ellipse at center, transparent ${40-i*20}%, rgba(0,0,0,${0.55+i*0.35}) 100%)`;
+  } else {
+    document.getElementById('vignette').style.background =
+      'radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.55) 100%)';
+  }
+
+  // Attack
+  if (dist < 1.5) {
+    hp -= 40 * dt;
+    dmgTimer = 0.25;
+    if (hp <= 0) die('Dr. Harlow found you in Ward 4.');
+  }
+
+  // Respawn entity into room when very far
+  if (dist > 35) {
+    const a = Math.random()*Math.PI*2;
+    entityPos.set(cp.x+Math.cos(a)*12, 0, cp.z+Math.sin(a)*12);
+  }
+}
+
+let hp = 100;
+
+// ── ANIMATE ──────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (!gameActive) { renderer.render(scene,camera); return; }
+
+  missionTime += dt;
+  movePlayer(dt);
+  updateEntityBehavior(dt);
+  updatePA(dt);
+  checkNearby();
+  updateLights(dt);
+
+  // Passive sanity drain
+  sanity = Math.max(0, sanity - dt*0.8);
+  document.getElementById('sanity-fill').style.width = sanity+'%';
+  if (sanity < 30) document.getElementById('sanity-fill').style.background='rgba(255,180,100,0.5)';
+
+  // Whispers at low sanity
+  if (sanity < 40 && Math.random()<0.002)
+    showMsg(['You\'ve been here before.','The ward is empty.','Don\'t look in the rooms.','Dr. Harlow is calling for you.'][Math.floor(Math.random()*4)], 2.5);
+
+  // Flashes
+  if (dmgTimer>0) { dmgTimer-=dt; document.getElementById('dmg-flash').style.background=`rgba(220,0,0,${Math.max(0,dmgTimer*0.8)})`; }
+  if (whiteTimer>0) { whiteTimer-=dt; if(whiteTimer<=0) document.getElementById('white-flash').style.background='rgba(255,255,220,0)'; }
+  if (msgTimer>0) { msgTimer-=dt; if(msgTimer<=0) document.getElementById('msg').style.opacity='0'; }
+
+  renderer.render(scene, camera);
+}
+
+function movePlayer(dt) {
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  const sprint = keys['ShiftLeft'] && sprintStam > 0;
+  const speed = sprint ? 5.5 : 3.2;
+  if (sprint) sprintStam=Math.max(0,sprintStam-dt*28);
+  else sprintStam=Math.min(100,sprintStam+dt*16);
+
+  const dir = new THREE.Vector3();
+  if (keys['KeyW']||keys['ArrowUp'])    dir.z -= 1;
+  if (keys['KeyS']||keys['ArrowDown'])  dir.z += 1;
+  if (keys['KeyA']||keys['ArrowLeft'])  dir.x -= 1;
+  if (keys['KeyD']||keys['ArrowRight']) dir.x += 1;
+  dir.normalize().applyEuler(new THREE.Euler(0,yaw,0));
+  camera.position.x += dir.x*speed*dt;
+  camera.position.z += dir.z*speed*dt;
+  camera.position.x = Math.max(-6,Math.min(6,camera.position.x));
+  camera.position.z = Math.max(-10,Math.min(10,camera.position.z));
+
+  if (keys['Space'] && onGround) { velocityY=4; onGround=false; }
+  velocityY -= 14*dt;
+  camera.position.y += velocityY*dt;
+  if (camera.position.y<=1.65) { camera.position.y=1.65; velocityY=0; onGround=true; }
+}
+
+function updateLights(dt) {
+  flickerLights.forEach(fl => {
+    fl.t += dt;
+    if (fl.broken) {
+      // Erratic broken flicker
+      if (Math.random()<0.04) {
+        fl.light.intensity = Math.random()<0.3 ? 0 : fl.base*(Math.random()*0.8);
+      }
+    } else {
+      fl.light.intensity = fl.base*(0.88+Math.sin(fl.t*9.3)*0.08+Math.random()*0.06);
+      if (Math.random()<0.002) {
+        fl.light.intensity = 0;
+        setTimeout(()=>{ if(fl.light) fl.light.intensity=fl.base; }, 60+Math.random()*80);
+      }
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>
